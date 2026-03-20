@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VozLink - Chamadas de Áudio P2P</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+<body>
+    <div class="glass-container">
+        <header>
+            <h1>VozLink</h1>
+            <p id="status-text">Conectando ao servidor...</p>
+        </header>
+
+        <main>
+            <!-- Login Section -->
+            <section id="login-section" class="active">
+                <div class="input-group">
+                    <label for="my-id">Seu Nome/ID</label>
+                    <input type="text" id="my-id" placeholder="Digite seu ID...">
+                </div>
+                <button id="btn-login" class="primary-btn">Entrar</button>
+            </section>
+
+            <!-- Dashboard Section -->
+            <section id="dashboard-section">
+                <div class="user-info">
+                    <span>Logado como: <strong id="display-my-id">--</strong></span>
+                </div>
+                <div class="input-group">
+                    <label for="remote-id">ID do Amigo</label>
+                    <input type="text" id="remote-id" placeholder="ID para ligar...">
+                </div>
+                <button id="btn-call" class="primary-btn call-btn">
+                    <span class="icon">📞</span> Ligar
+                </button>
+            </section>
+
+            <!-- Call Section -->
+            <section id="call-section">
+                <div class="call-avatar">
+                    <div class="pulse-ring"></div>
+                    <div class="avatar-circle">
+                        <span id="remote-avatar-char">?</span>
+                    </div>
+                </div>
+                <h2 id="calling-name">Chamando...</h2>
+                <div class="call-timer">00:00</div>
+                <div class="audio-visualizer">
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                </div>
+                <div class="call-actions">
+                    <button id="btn-mute" class="secondary-btn">🎤</button>
+                    <button id="btn-hangup" class="danger-btn">✖</button>
+                </div>
+            </section>
+
+            <!-- Incoming Call Notification -->
+            <div id="incoming-modal" class="modal">
+                <div class="modal-content glass">
+                    <h3>Chamada de <span id="incoming-caller">...</span></h3>
+                    <div class="modal-actions">
+                        <button id="btn-answer" class="success-btn">Atender</button>
+                        <button id="btn-reject" class="danger-btn">Recusar</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>P2P Connection • Opus Compression • Low Latency</p>
+        </footer>
+    </div>
+
+    <!-- Audio element for remote stream -->
+    <audio id="remote-audio" autoplay></audio>
+
+    <script src="main.js"></script>
+</body>
+</html>
