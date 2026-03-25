@@ -31,10 +31,16 @@ const remoteAudio = document.getElementById('remote-audio');
 const incomingModal = document.getElementById('incoming-modal');
 const incomingCaller = document.getElementById('incoming-caller');
 
+// Video Elements
+const videoContainer = document.getElementById('video-container');
+const remoteVideo = document.getElementById('remote-video');
+const localVideo = document.getElementById('local-video');
+
 // Buttons
 const btnLogin = document.getElementById('btn-login');
 const btnCall = document.getElementById('btn-call');
 const btnMute = document.getElementById('btn-mute');
+const btnCamera = document.getElementById('btn-camera'); // New
 const btnHangup = document.getElementById('btn-hangup');
 const btnAnswer = document.getElementById('btn-answer');
 const btnReject = document.getElementById('btn-reject');
@@ -42,12 +48,22 @@ const btnReject = document.getElementById('btn-reject');
 // Initialization: Get Microphone Access
 async function initMedia() {
     try {
-        localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        statusText.innerText = 'Microfone pronto. Conecte-se para começar.';
+        localStream = await navigator.mediaDevices.getUserMedia({ 
+            audio: true, 
+            video: { width: 640, height: 480 } 
+        });
+        localVideo.srcObject = localStream;
+        statusText.innerText = 'Mídia pronta. Conecte-se para começar.';
     } catch (err) {
-        console.error('Falha ao acessar o microfone:', err);
-        statusText.innerText = 'Erro: Sem acesso ao microfone.';
-        alert('Por favor, permita o acesso ao microfone para usar o VozLink.');
+        console.warn('Falha ao acessar vídeo, tentando apenas áudio:', err);
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            statusText.innerText = 'Áudio pronto. Conecte-se para começar.';
+        } catch (audioErr) {
+            console.error('Falha ao acessar mídia:', audioErr);
+            statusText.innerText = 'Erro: Sem acesso ao microfone.';
+            alert('Por favor, permita o acesso ao microfone para usar o VozLink.');
+        }
     }
 }
 
@@ -134,6 +150,16 @@ function answerCall(call) {
 
 function setupCallListeners(call) {
     call.on('stream', (remoteStream) => {
+        const hasVideo = remoteStream.getVideoTracks().length > 0;
+        
+        if (hasVideo) {
+            videoContainer.classList.remove('hidden');
+            remoteVideo.srcObject = remoteStream;
+            remoteVideo.play();
+        } else {
+            videoContainer.classList.add('hidden');
+        }
+
         remoteAudio.srcObject = remoteStream;
         setupVisualizer(remoteStream);
     });
@@ -206,8 +232,11 @@ function resetUI() {
     stopTimer();
     switchSection('dashboard');
     statusText.innerText = 'Conectado e Pronto';
-    if (currentCall) currentCall = null;
+    if (currentCall) currentCall.close();
+    currentCall = null;
     remoteAudio.srcObject = null;
+    remoteVideo.srcObject = null;
+    videoContainer.classList.add('hidden');
     
     // Reset visualizer bars
     const bars = document.querySelectorAll('.bar');
@@ -245,16 +274,38 @@ btnHangup.addEventListener('click', hangup);
 
 btnMute.addEventListener('click', () => {
     const enabled = localStream.getAudioTracks()[0].enabled;
-    if (enabled) {
-        localStream.getAudioTracks()[0].enabled = false;
-        btnMute.innerText = '🔇';
-        btnMute.style.backgroundColor = 'var(--danger)';
-    } else {
-        localStream.getAudioTracks()[0].enabled = true;
-        btnMute.innerText = '🎤';
-        btnMute.style.backgroundColor = 'var(--glass-bg)';
-    }
+    localStream.getAudioTracks()[0].enabled = !enabled;
+    btnMute.innerText = !enabled ? '🎤' : '🔇';
+    btnMute.style.backgroundColor = !enabled ? 'var(--glass-bg)' : 'var(--danger)';
 });
+
+btnCamera.onclick = async () => {
+    const videoTrack = localStream.getVideoTracks()[0];
+    
+    if (!videoTrack) {
+        try {
+            const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            const newTrack = tempStream.getVideoTracks()[0];
+            localStream.addTrack(newTrack);
+            localVideo.srcObject = localStream;
+            btnCamera.classList.add('active');
+            videoContainer.classList.remove('hidden');
+            
+            if (currentCall && currentCall.peerConnection) {
+                const sender = currentCall.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+                if (sender) sender.replaceTrack(newTrack);
+                else currentCall.peerConnection.addTrack(newTrack, localStream);
+            }
+        } catch (err) {
+            alert('Não foi possível acessar a câmera.');
+        }
+    } else {
+        const enabled = videoTrack.enabled;
+        videoTrack.enabled = !enabled;
+        btnCamera.classList.toggle('active', !enabled);
+        videoContainer.classList.toggle('hidden', enabled);
+    }
+};
 
 // Start
 initMedia();
