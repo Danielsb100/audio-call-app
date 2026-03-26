@@ -58,7 +58,18 @@ async function initMedia() {
         console.warn('Falha ao acessar vídeo, tentando apenas áudio:', err);
         try {
             localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-            statusText.innerText = 'Áudio pronto. Conecte-se para começar.';
+            
+            // FIX: Create a dummy video track so PeerJS always negotiates video
+            const canvas = document.createElement('canvas');
+            canvas.width = 1; canvas.height = 1;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, 1, 1);
+            const dummyStream = canvas.captureStream();
+            const dummyTrack = dummyStream.getVideoTracks()[0];
+            localStream.addTrack(dummyTrack);
+            
+            statusText.innerText = 'Áudio pronto (Vídeo em espera).';
         } catch (audioErr) {
             console.error('Falha ao acessar mídia:', audioErr);
             statusText.innerText = 'Erro: Sem acesso ao microfone.';
@@ -258,7 +269,10 @@ function startTimer() {
 }
 
 function stopTimer() {
-    clearInterval(callDurationInterval);
+    if (callDurationInterval) {
+        clearInterval(callDurationInterval);
+        callDurationInterval = null;
+    }
 }
 
 // Event Listeners
@@ -280,30 +294,44 @@ btnMute.addEventListener('click', () => {
 });
 
 btnCamera.onclick = async () => {
-    const videoTrack = localStream.getVideoTracks()[0];
-    
-    if (!videoTrack) {
-        try {
-            const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
-            const newTrack = tempStream.getVideoTracks()[0];
-            localStream.addTrack(newTrack);
-            localVideo.srcObject = localStream;
+    let videoTrack = localStream.getVideoTracks()[0];
+    const isDummy = videoTrack && videoTrack.label === ''; // Canvas tracks often have empty labels or generic ones
+
+    if (!videoTrack || isDummy || !videoTrack.enabled) {
+        // If we have a dummy track or no track, try to get real video
+        if (!videoTrack || isDummy) {
+            try {
+                const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                const newTrack = tempStream.getVideoTracks()[0];
+                
+                if (videoTrack) localStream.removeTrack(videoTrack);
+                localStream.addTrack(newTrack);
+                localVideo.srcObject = localStream;
+                btnCamera.classList.add('active');
+                videoContainer.classList.remove('hidden');
+                
+                if (currentCall && currentCall.peerConnection) {
+                    const senders = currentCall.peerConnection.getSenders();
+                    const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+                    if (videoSender) videoSender.replaceTrack(newTrack);
+                    else currentCall.peerConnection.addTrack(newTrack, localStream);
+                }
+            } catch (err) {
+                alert('Não foi possível acessar a câmera.');
+            }
+        } else {
+            // Just toggle back on
+            videoTrack.enabled = true;
             btnCamera.classList.add('active');
             videoContainer.classList.remove('hidden');
-            
-            if (currentCall && currentCall.peerConnection) {
-                const sender = currentCall.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-                if (sender) sender.replaceTrack(newTrack);
-                else currentCall.peerConnection.addTrack(newTrack, localStream);
-            }
-        } catch (err) {
-            alert('Não foi possível acessar a câmera.');
         }
     } else {
-        const enabled = videoTrack.enabled;
-        videoTrack.enabled = !enabled;
-        btnCamera.classList.toggle('active', !enabled);
-        videoContainer.classList.toggle('hidden', enabled);
+        // Toggle off
+        videoTrack.enabled = false;
+        btnCamera.classList.remove('active');
+        // We keep the container visible if remote has video
+        const remoteHasVideo = currentCall && remoteVideo.srcObject && remoteVideo.srcObject.getVideoTracks().some(t => t.enabled);
+        if (!remoteHasVideo) videoContainer.classList.add('hidden');
     }
 };
 
